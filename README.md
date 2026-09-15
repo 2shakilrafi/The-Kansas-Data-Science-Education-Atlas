@@ -7,6 +7,7 @@
 - [Research Questions](#research-questions)
 - [Data Sources](#data-sources)
 - [Datasets](#datasets)
+- [Spatial Analyses](#spatial-analyses)
 - [Policy Recommendations](#policy-recommendations)
 - [Quick Start](#quick-start)
 - [Tech Stack](#tech-stack)
@@ -59,6 +60,19 @@ The project integrates 7 interconnected datasets derived from multiple authorita
 | Dataset 6 | Socioeconomic indicators and program impact                       | 106     | 11       |
 | Dataset 7 | Comprehensive ML-ready integration (Datasets 1-6)                 | 106     | 32       |
 
+## Spatial Analyses
+
+The reproducible R workflow in [`spatial-analysis/`](spatial-analysis/) contains
+two county-level analyses:
+
+1. **Access shadows:** multiscale physical accessibility and a joint
+   physical/digital access screen.
+2. **Expansion-site optimization:** population-reach and equity-priority
+   sequences for one to five hypothetical learning hubs.
+
+The repository tracks source code and tests. Rendered HTML and generated
+pipeline artifacts are intentionally excluded and can be regenerated locally.
+
 ## Policy Recommendations
 
 1. *Immediate Expansion:* Target the 4 False Positive counties (counties predicted to have programs but lacking them) as high-leverage opportunities
@@ -72,7 +86,7 @@ The project integrates 7 interconnected datasets derived from multiple authorita
 ## Quick Start
 
 ```bash
-git clone https://github.com/csrisurya/The-Kansas-Data-Science-Education-Atlas.git
+git clone https://github.com/2shakilrafi/The-Kansas-Data-Science-Education-Atlas.git
 cd The-Kansas-Data-Science-Education-Atlas
 ```
 

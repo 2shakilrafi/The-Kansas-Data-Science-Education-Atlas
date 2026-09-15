@@ -1,0 +1,234 @@
+---
+title: "Analysis 1: DS/AI Education Access Shadows in Kansas"
+subtitle: "A multiscale enhanced two-step floating catchment area analysis"
+author: "Shakil Rafi, Surya Chandramouli, Safia Malallah"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show R code"
+    embed-resources: true
+    theme: cosmo
+    fig-width: 11
+    fig-height: 6
+execute:
+  warning: false
+  message: false
+  echo: false
+---
+
+```{r}
+library(targets)
+library(tidyverse)
+library(sf)
+library(gt)
+
+atlas <- tar_read(atlas)
+data_audit <- tar_read(data_audit)
+accessibility <- tar_read(accessibility_classified)
+access_map <- tar_read(access_map)
+nearest_provider <- tar_read(nearest_provider)
+scenario_summary <- tar_read(scenario_summary)
+priority_counties <- tar_read(priority_counties_100km)
+validation <- tar_read(validation)
+accessibility_plot <- tar_read(accessibility_plot)
+access_shadow_plot <- tar_read(access_shadow_plot)
+scenario_distribution_plot <- tar_read(scenario_distribution_plot)
+```
+
+## Research question
+
+Where do Kansas residents have weak physical and digital access to data-science and artificial-intelligence education, and how sensitive are those access patterns to the assumed geographic catchment?
+
+This analysis estimates county-level physical accessibility using an enhanced two-step floating catchment area framework. It then compares physical accessibility with broadband access to identify counties in a baseline **DS/AI access shadow**: physical and digital access at or below their respective statewide medians.
+
+The analysis is descriptive and cross-sectional. It measures potential access under explicit assumptions; it does not measure enrollment, capacity, travel behavior, or causal effects.
+
+## Reproducible data audit
+
+The source contains `r nrow(atlas)` Kansas counties. `r sum(atlas$has_programs == 1)` counties have a positive program-impact score, and `r sum(atlas$online_impact_score > 0)` counties have positive provider-side online impact.
+
+```{r}
+data_audit |>
+  gt() |>
+  cols_label(
+    check = "Check",
+    value = "Value",
+    interpretation = "Interpretation"
+  ) |>
+  tab_header(title = "Input-data validation") |>
+  opt_row_striping()
+```
+
+One broadband-coverage value uses `-1` as a missing-data sentinel and is converted to `NA` during analysis. All 105 values of `low_income_digital_access_rate` exceed 1.0; that variable is retained for provenance but excluded from the access-shadow definition pending validation of its numerator and denominator.
+
+## Accessibility model
+
+For provider county \(j\), the supply-to-demand ratio is
+
+\[
+R_j = \frac{S_j}{\sum_k P_k w(d_{kj})},
+\]
+
+where \(S_j\) is the county's `total_program_impact_score`, \(P_k\) is county population, and \(w(d_{kj})\) is a distance-decay weight.
+
+County \(i\)'s accessibility is
+
+\[
+A_i = \sum_j R_j w(d_{ij}).
+\]
+
+The baseline kernel is
+
+\[
+w(d;c) =
+\begin{cases}
+\exp\{-3(d/c)^2\}, & d \leq c,\\
+0, & d > c,
+\end{cases}
+\]
+
+evaluated at catchments of 50, 100, and 150 km. Distances are calculated between county representative points in NAD83 / Conus Albers (EPSG:5070). The reported scale is program-impact units per 100,000 potential residents.
+
+## Physical accessibility
+
+```{r}
+accessibility_plot
+```
+
+The 50 km scenario is intentionally restrictive and leaves `r sum(accessibility$catchment_km == 50 & accessibility$physical_access_per_100k == 0)` counties with zero modeled access. Larger catchments distribute the same statewide provider supply across broader potential-demand areas.
+
+```{r}
+scenario_summary |>
+  mutate(
+    across(
+      c(minimum, first_quartile, median, third_quartile, maximum),
+      ~ round(.x, 3)
+    ),
+    access_shadow_population = scales::comma(access_shadow_population)
+  ) |>
+  gt() |>
+  cols_label(
+    catchment_km = "Catchment (km)",
+    minimum = "Minimum",
+    first_quartile = "Q1",
+    median = "Median",
+    third_quartile = "Q3",
+    maximum = "Maximum",
+    counties_with_zero_access = "Zero-access counties",
+    access_shadow_counties = "Access-shadow counties",
+    access_shadow_population = "Access-shadow population"
+  ) |>
+  tab_header(title = "Accessibility scenario summary") |>
+  opt_row_striping()
+```
+
+```{r}
+scenario_distribution_plot
+```
+
+## Physical and digital access shadows
+
+```{r}
+access_shadow_plot
+```
+
+The access-shadow classification is deliberately simple and auditable. Within each distance scenario, values at or below the statewide median form the low-access group. This convention correctly classifies zero-access counties when the median physical-access score is zero. Results should be treated as a prioritization screen, not as a definitive designation.
+
+### Priority counties under the 100 km scenario
+
+The 100 km scenario is used as the middle baseline because it lies between a restrictive local catchment and a broad regional catchment.
+
+```{r}
+priority_counties |>
+  mutate(
+    population = scales::comma(population),
+    physical_access_per_100k = round(physical_access_per_100k, 3),
+    broadband_access_index = round(broadband_access_index, 3),
+    poverty_rate = scales::percent(poverty_rate, accuracy = 0.1),
+    local_program = if_else(local_program, "Yes", "No")
+  ) |>
+  gt() |>
+  cols_label(
+    county = "County",
+    population = "Population",
+    physical_access_per_100k = "Physical access per 100,000",
+    broadband_access_index = "Broadband index",
+    poverty_rate = "Poverty rate",
+    local_program = "Local program"
+  ) |>
+  tab_header(
+    title = "Counties in the 100 km access shadow",
+    subtitle = "Ordered from lower physical accessibility and broadband access"
+  ) |>
+  opt_row_striping()
+```
+
+## Nearest-provider diagnostic
+
+Nearest-provider distance is not the accessibility measure, but it is a useful descriptive diagnostic. These distances are straight-line representative-point distances and must not be described as road travel times.
+
+```{r}
+nearest_provider |>
+  slice_head(n = 15) |>
+  mutate(nearest_provider_distance_km = round(nearest_provider_distance_km, 1)) |>
+  gt() |>
+  cols_label(
+    county_name = "County",
+    nearest_provider_county = "Nearest Kansas provider county",
+    nearest_provider_distance_km = "Distance (km)"
+  ) |>
+  tab_header(title = "Fifteen counties farthest from a Kansas provider county") |>
+  opt_row_striping()
+```
+
+## Computational validation
+
+The E2SFCA construction should conserve statewide program-impact supply: population-weighted county accessibility must sum back to the original provider supply under every scenario.
+
+```{r}
+validation |>
+  mutate(
+    across(
+      c(original_supply, distributed_supply, absolute_difference),
+      ~ format(.x, digits = 8, scientific = FALSE)
+    )
+  ) |>
+  gt() |>
+  cols_label(
+    catchment_km = "Catchment (km)",
+    original_supply = "Original supply",
+    distributed_supply = "Distributed supply",
+    absolute_difference = "Absolute difference",
+    supply_conserved = "Supply conserved",
+    all_access_nonnegative = "All access nonnegative",
+    county_rows = "County rows"
+  ) |>
+  tab_header(title = "Model integrity checks") |>
+  opt_row_striping()
+```
+
+## Interpretation and limitations
+
+1. `total_program_impact_score` is a transparent proxy for educational supply, not enrollment capacity, available seats, faculty, or completions.
+2. County representative-point distance is not travel time. Road-network travel times should replace it in a later version.
+3. The baseline includes Kansas providers only. Nearby providers in Colorado, Nebraska, Missouri, and Oklahoma may materially change border-county access.
+4. `online_impact_score` is assigned to the provider county and does not reveal where online learners live. It is therefore not folded into physical accessibility.
+5. Broadband access is used as a separate access dimension, avoiding the circular reuse of `effective_access_score`, which already combines online impact and broadband access.
+6. The 50, 100, and 150 km scenarios and the decay parameter are assumptions. Conclusions should be reported only when they are robust across scenarios.
+
+## Reproduction
+
+From the `spatial-analysis` directory:
+
+```r
+targets::tar_make()
+```
+
+The raw CSV remains unchanged. Derived tables, maps, and validation outputs are written to `output/` by tracked file targets.
+
+```{r}
+sessionInfo()
+```

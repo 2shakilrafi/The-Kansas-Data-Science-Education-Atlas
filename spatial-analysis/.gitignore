@@ -1,0 +1,12 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+renv/library/
+renv/staging/
+_targets/
+_freeze/
+output/
+*.html
+*_files/
+.DS_Store
