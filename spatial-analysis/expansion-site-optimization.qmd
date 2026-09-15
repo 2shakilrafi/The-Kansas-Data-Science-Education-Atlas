@@ -1,0 +1,157 @@
+---
+title: "Analysis 2: Kansas DS/AI Expansion-Site Optimization"
+subtitle: "A transparent population-reach and equity-priority screen"
+author: "Shakil Rafi, Surya Chandramouli, Safia Malallah"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show R code"
+    embed-resources: true
+    theme: cosmo
+    fig-width: 11
+    fig-height: 6
+execute:
+  warning: false
+  message: false
+  echo: false
+---
+
+```{r}
+library(targets)
+library(tidyverse)
+library(gt)
+
+atlas <- tar_read(atlas)
+expansion_sites <- tar_read(expansion_sites)
+expansion_sites_plot <- tar_read(expansion_sites_plot)
+```
+
+## Research question
+
+If Kansas could add one to five new DS/AI learning hubs, which county sequence
+would expand reach most effectively, and how does an equity objective change
+those choices?
+
+This is a deterministic greedy location-allocation screen. It ranks locations
+under explicit assumptions; it does not establish capacity, cost, feasibility,
+institutional approval, or a real-world optimal facility plan.
+
+## Candidate sites and baseline coverage
+
+The 17 counties with an observed program form the existing network. The other
+88 counties are eligible candidate sites. The model uses the same 100 km
+Gaussian distance-decay kernel and decay parameter of 3 used in Analysis 1.
+
+For demand county \(i\), baseline reach is the largest distance weight from any
+existing provider:
+
+$$
+C_i^{(0)} = \max_{j\in\mathcal E} w_{ij}(100).
+$$
+
+Taking the maximum prevents overlapping facilities from double-counting the
+same resident. Every hypothetical new hub is treated as an equal-strength reach
+opportunity.
+
+## Population and equity objectives
+
+The population strategy gives every resident the same weight. The equity
+strategy averages standardized poverty, broadband disadvantage, and lower
+bachelor's-or-higher attainment:
+
+$$
+N_i = \frac{z(\mathrm{poverty}_i)-z(B_i)-z(\mathrm{bachelor}_i)}{3}.
+$$
+
+The need score is rescaled to a priority multiplier between 1 and 3. For a
+selected candidate set \(\mathcal S\), the strategy-specific objective is
+
+$$
+F_q(\mathcal S) = \sum_i P_i q_i
+\max\!\left\{C_i^{(0)},\max_{c\in\mathcal S}w_{ic}(100)\right\}.
+$$
+
+At each of five rounds, the algorithm evaluates every remaining candidate and
+selects the county with the largest marginal gain. Exact ties are broken
+alphabetically. Population and equity sequences are optimized independently.
+
+The reported cumulative equivalent reach is distance-weighted population, not
+a literal count of students served. Objective gains are comparable within a
+strategy, not across the population and equity strategies.
+
+## Results
+
+```{r}
+expansion_sites_plot
+```
+
+```{r}
+expansion_sites |>
+  mutate(
+    objective_gain = scales::comma(round(objective_gain)),
+    cumulative_equivalent_population_covered = scales::comma(
+      round(cumulative_equivalent_population_covered)
+    ),
+    cumulative_zero_access_population_reached = scales::comma(
+      cumulative_zero_access_population_reached
+    ),
+    selected_county_population = scales::comma(
+      selected_county_population
+    ),
+    selected_county_poverty_rate = scales::percent(
+      selected_county_poverty_rate,
+      accuracy = 0.1
+    ),
+    selected_county_broadband_index = round(
+      selected_county_broadband_index,
+      3
+    )
+  ) |>
+  gt(groupname_col = "strategy") |>
+  cols_label(
+    site_number = "Order",
+    selected_county = "Recommended county",
+    objective_gain = "Incremental objective gain",
+    cumulative_equivalent_population_covered =
+      "Cumulative equivalent reach",
+    cumulative_zero_access_population_reached =
+      "Previously zero-access population reached",
+    selected_county_population = "County population",
+    selected_county_poverty_rate = "Poverty",
+    selected_county_broadband_index = "Broadband index",
+    selected_county_four_year_colleges =
+      "Atlas four-year-college aggregate (provisional)"
+  ) |>
+  tab_header(
+    title = "One-to-five-site location sequences",
+    subtitle = "Conditional on the stated 100 km objective"
+  ) |>
+  opt_row_striping()
+```
+
+## Limitations
+
+1. The greedy sequence is conditional on the modeled objective and is not an
+   exact search over every five-county combination.
+2. Generic new hubs have no modeled costs, capacities, facilities, staffing,
+   political constraints, or institutional partnerships.
+3. Representative-point distance is not road travel time, and providers beyond
+   Kansas are omitted.
+4. Equity components and equal weights are analyst-defined assumptions.
+5. The selected-county college field reproduces the Atlas aggregate and is not
+   a verified count of distinct institutions.
+
+## Reproduction
+
+From the `spatial-analysis` directory:
+
+```r
+targets::tar_make()
+```
+
+```{r}
+sessionInfo()
+```
